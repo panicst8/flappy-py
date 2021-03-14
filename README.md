@@ -1,20 +1,22 @@
-<h1 align="center">Welcome to py-start 👋</h1>
+<h1 align="center">Welcome to flappy-py.py 👋</h1>
 <p>
   <img alt="Version" src="https://img.shields.io/badge/version-1.5-blue.svg?cacheSeconds=2592000" />
 </p>
 
-> Python project starter seed
+> flappy bird clone with NeuroEvolution using the NEAT algorithm based on tutorial by Tim Ruscica
+
 
 ## Install
 
 ```sh
-clone repo to new project name, change into new repo, run bash init.sh, once installs complete, activate virtual environment by running: source .venv/bin/activate
+clone repo, change into repo directory, run bash init.sh, once installs complete, activate virtual environment by running: source .venv/bin/activate
 ```
 
 ## Usage
 
 ```sh
-after setup should attach to repo by running the following: <insert instructions from init.sh here>
+cd app
+python flappy-py.py
 ```
 
 ## Run tests

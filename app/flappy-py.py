@@ -1,8 +1,7 @@
-""" sample module doc string """
+""" flappy bird clone and machine learning to make perfect bird """
 
 import pygame
 import neat
-import time
 import os
 import random
 from typing import Any
@@ -25,6 +24,8 @@ STAT_FONT = pygame.font.SysFont("comicsans", 50)
 
 
 class Bird:
+    """ Bird object """
+
     IMGS = BIRD_IMGS
     MAX_ROTATION = 25
     ROT_VEL = 20
@@ -41,11 +42,13 @@ class Bird:
         self.img = self.IMGS[0]
 
     def jump(self) -> None:
+        """ make bird jump """
         self.vel = -10.5
         self.tick_count = 0
         self.height = self.y
 
     def move(self) -> None:
+        """ control bird movement """
         self.tick_count += 1
         d = self.vel * self.tick_count + 1.5 * self.tick_count ** 2
 
@@ -65,6 +68,7 @@ class Bird:
                 self.tilt -= self.ROT_VEL
 
     def draw(self, win: Any) -> None:
+        """ select image and draw bird """
         self.img_count += 1
 
         if self.img_count < self.ANIMATION_TIME:
@@ -88,10 +92,13 @@ class Bird:
         win.blit(rotated_image, new_rect.topleft)
 
     def get_mask(self) -> Any:
+        """ get mask used for collisions """
         return pygame.mask.from_surface(self.img)
 
 
 class Pipe:
+    """ pipe object """
+
     GAP = 200
     VEL = 5
 
@@ -108,18 +115,22 @@ class Pipe:
         self.set_height()
 
     def set_height(self) -> None:
+        """ set pipe hieghts """
         self.height = random.randrange(50, 450)
         self.top = self.height - self.PIPE_TOP.get_height()
         self.bottom = self.height + self.GAP
 
     def move(self) -> None:
+        """ controls pipe movement """
         self.x -= self.VEL
 
     def draw(self, win: Any) -> None:
+        """ draw pipe """
         win.blit(self.PIPE_TOP, (self.x, self.top))
         win.blit(self.PIPE_BOTTOM, (self.x, self.bottom))
 
     def collide(self, bird: Bird) -> bool:
+        """ track pipe collisions """
         bird_mask = bird.get_mask()
         top_mask = pygame.mask.from_surface((self.PIPE_TOP))
         bottom_mask = pygame.mask.from_surface((self.PIPE_BOTTOM))
@@ -137,6 +148,8 @@ class Pipe:
 
 
 class Base:
+    """ base object """
+
     VEL = 5
     WIDTH = BASE_IMG.get_width()
     IMG = BASE_IMG
@@ -147,6 +160,7 @@ class Base:
         self.x2 = self.WIDTH
 
     def move(self) -> None:
+        """ controls base movement """
         self.x1 -= self.VEL
         self.x2 -= self.VEL
 
@@ -157,11 +171,13 @@ class Base:
             self.x2 = self.x1 + self.WIDTH
 
     def draw(self, win: Any) -> None:
+        """ draw base """
         win.blit(self.IMG, (self.x1, self.y))
         win.blit(self.IMG, (self.x2, self.y))
 
 
-def draw_window(win: Any, bird: Bird, pipes: Any, base: Any, score: int) -> None:
+def draw_window(win: Any, birds: list[Bird], pipes: Any, base: Any, score: int) -> None:
+    """ draw objects """
     win.blit(BG_IMG, (0, 0))
 
     for pipe in pipes:
@@ -172,12 +188,25 @@ def draw_window(win: Any, bird: Bird, pipes: Any, base: Any, score: int) -> None
 
     base.draw(win)
 
-    bird.draw(win)
+    for x, bird in enumerate(birds):
+        bird.draw(win)
     pygame.display.update()
 
 
-def main() -> None:
-    bird: Bird = Bird(230, 350)
+def main(genomes, config) -> None:
+    """ main """
+    # bird: Bird = Bird(230, 350)
+    nets = []
+    ge = []
+    birds = []
+
+    for _, g in genomes:
+        net = neat.nn.FeedForwardNetwork.create(g, config)
+        nets.append(net)
+        birds.append(Bird(230, 350))
+        g.fitness = 0
+        ge.append(g)
+
     base = Base(730)
     pipes = [Pipe(600)]
 
@@ -192,35 +221,68 @@ def main() -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+                pygame.quit()
+                quit()
+                break
+
+        pipe_ind = 0
+
+        if len(birds) > 0:
+            if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():
+                pipe_ind = 1
+        else:
+            run = False
+            break
+
+        for x, bird in enumerate(birds):
+            bird.move()
+            ge[x].fitness += 0.1
+
+            output = nets[x].activate(
+                (bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom))
+            )
+
+            if output[0] > 0.5:
+                bird.jump()
+
+        base.move()
+
         # bird.move()
         rem = []
         add_pipe = False
         for pipe in pipes:
-            if pipe.collide(bird):
-                pass
+            for x, bird in enumerate(birds):
+                if pipe.collide(bird):
+                    ge[x].fitness -= 1
+                    birds.pop(x)
+                    nets.pop(x)
+                    ge.pop(x)
+
+                if not pipe.passed and pipe.x < bird.x:
+                    pipe.passed = True
+                    add_pipe = True
+
             if pipe.x + pipe.PIPE_TOP.get_width() < 0:
                 rem.append(pipe)
-
-            if not pipe.passed and pipe.x < bird.x:
-                pipe.passed = True
-                add_pipe = True
 
             pipe.move()
 
         if add_pipe:
             score += 1
+            for g in ge:
+                g.fitness += 5
             pipes.append(Pipe(600))
 
         for r in rem:
             pipes.remove(r)
 
-        if bird.y + bird.img.get_height() >= 730:
-            pass
+        for x, bird in enumerate(birds):
+            if bird.y + bird.img.get_height() >= 730 or bird.y < 0:
+                birds.pop(x)
+                nets.pop(x)
+                ge.pop(x)
 
-        base.move()
-        draw_window(win, bird, pipes, base, score)
-    pygame.quit()
-    quit()
+        draw_window(win, birds, pipes, base, score)
 
 
 class SampleClass:
@@ -236,12 +298,26 @@ def sample_func_subtract(first_int: int, second_int: int) -> int:
     return first_int - second_int
 
 
-def run() -> None:
-    pass
+def run(config_path: str) -> None:
+    """ machine learning setup """
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_path,
+    )
+    p = neat.Population(config)
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
 
+    # TODO: capture the winning bird with pickle and add load option
+    # winner = p.run(main, 50)
 
-main()
 
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_dir = os.path.join(local_dir, "config-feedforward.txt")
+
+    run(config_dir)
